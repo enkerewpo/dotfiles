@@ -1,20 +1,26 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
-# iKBC (Windows 布局) 在 macOS 上把 ⌘/⌥ 对调，只作用于这颗键盘。
-# 物理 Alt(挨着空格) -> ⌘，物理 Win -> ⌥，与 Mac 原生键盘手型一致。
-# 设备：VendorID 0x1a81 (Sonix) / ProductID 0x1202，走 wireless dongle。
+# Swap ⌘ / ⌥ on the iKBC (Windows-layout) keyboard only, so the key under the
+# thumb is ⌘ as it is on a Mac keyboard. Physical Alt (next to space) -> ⌘,
+# physical Win -> ⌥.
+# Device: VendorID 0x1a81 (Sonix) / ProductID 0x1202, over the wireless dongle.
 set -euo pipefail
 
 VENDOR=0x1a81
 PRODUCT=0x1202
 
-# 先清空再写入，而不是直接覆盖。
+# Clear before setting, rather than overwriting in place.
 #
-# 见过一次这样的状态：映射「在」（hidutil --get 读得出来），但键盘上整排
-# Esc + F1~F12 没有反应，⌘/⌥ 对调也半死不活。清空一次再写回去就好了，
-# 单纯重复 --set 不管用。推测是重启 / 重新插 dongle 后映射落在了过期的
-# RegistryID 上，需要重新落位。清空是幂等的，代价是一次瞬时调用，所以
-# 每次都做，让这条 agent 能自己把那个状态顶回来。
+# Seen once: the mapping is present -- `hidutil --get` reads it back -- while
+# the keyboard's whole Esc + F1..F12 row is dead and the ⌘/⌥ swap is only half
+# applied. Clearing it and writing it again fixes that; repeating the --set
+# alone does not. The likely shape is that after a reboot or a dongle re-plug
+# the mapping lands on a stale RegistryID and has to be re-seated (the device
+# exposes more than one).
+#
+# Clearing is idempotent and costs one more instantaneous call, so do it every
+# pass: the LaunchAgent then recovers that state within its 180 s interval
+# instead of needing someone to notice and intervene.
 hidutil property \
   --matching "{\"VendorID\":${VENDOR},\"ProductID\":${PRODUCT}}" \
   --set '{"UserKeyMapping":[]}' >/dev/null
