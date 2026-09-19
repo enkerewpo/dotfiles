@@ -8,6 +8,17 @@ set -euo pipefail
 VENDOR=0x1a81
 PRODUCT=0x1202
 
+# 先清空再写入，而不是直接覆盖。
+#
+# 见过一次这样的状态：映射「在」（hidutil --get 读得出来），但键盘上整排
+# Esc + F1~F12 没有反应，⌘/⌥ 对调也半死不活。清空一次再写回去就好了，
+# 单纯重复 --set 不管用。推测是重启 / 重新插 dongle 后映射落在了过期的
+# RegistryID 上，需要重新落位。清空是幂等的，代价是一次瞬时调用，所以
+# 每次都做，让这条 agent 能自己把那个状态顶回来。
+hidutil property \
+  --matching "{\"VendorID\":${VENDOR},\"ProductID\":${PRODUCT}}" \
+  --set '{"UserKeyMapping":[]}' >/dev/null
+
 hidutil property \
   --matching "{\"VendorID\":${VENDOR},\"ProductID\":${PRODUCT}}" \
   --set '{"UserKeyMapping":[
